@@ -26,7 +26,7 @@ async function getActiveTab() {
 async function sendCommand(command) {
   const tab = await getActiveTab();
 
-  if (!tab || !tab.id) {
+  if (!tab || typeof tab.id !== "number") {
     throw new Error("No active tab found");
   }
 
@@ -90,16 +90,32 @@ async function runCommand(command, successMessage) {
   }
 }
 
+async function selectTool(tool) {
+  try {
+    setDisabled(false);
+    let state = await sendCommand({ type: "set-tool", tool });
+
+    if (state.mode === "pan") {
+      state = await sendCommand({ type: "set-mode", mode: "draw" });
+    }
+
+    renderState(state);
+  } catch (error) {
+    setDisabled(true);
+    setStatus(error.message, true);
+  }
+}
+
 controls.toggleDraw.addEventListener("click", () => {
   runCommand({ type: "set-enabled", enabled: !activeState.enabled });
 });
 
 controls.penTool.addEventListener("click", () => {
-  runCommand({ type: "set-tool", tool: "pen" });
+  selectTool("pen");
 });
 
 controls.eraserTool.addEventListener("click", () => {
-  runCommand({ type: "set-tool", tool: "eraser" });
+  selectTool("eraser");
 });
 
 controls.panMode.addEventListener("click", () => {
