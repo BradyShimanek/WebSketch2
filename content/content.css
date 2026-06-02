@@ -1,0 +1,21 @@
+#websketch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#websketch-overlay.websketch-pan-mode {
+  pointer-events: none;
+}
+
+#websketch-overlay canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#websketch-overlay.websketch-hidden {
+  display: none;
+}
