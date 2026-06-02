@@ -17,7 +17,8 @@
     canvas: null,
     context: null,
     drawing: false,
-    lastPoint: null
+    lastPoint: null,
+    resizeObserver: null
   };
 
   function ensureOverlay() {
@@ -51,9 +52,23 @@
     overlay.addEventListener("pointerup", finishStroke);
     overlay.addEventListener("pointercancel", finishStroke);
     window.addEventListener("resize", resizeCanvas);
+    observeDocumentSize();
     applyOverlayState();
 
     return true;
+  }
+
+  function observeDocumentSize() {
+    if (state.resizeObserver || typeof ResizeObserver !== "function") {
+      return;
+    }
+
+    state.resizeObserver = new ResizeObserver(resizeCanvas);
+    state.resizeObserver.observe(document.documentElement);
+
+    if (document.body) {
+      state.resizeObserver.observe(document.body);
+    }
   }
 
   function resizeCanvas() {

@@ -5,6 +5,28 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const contentPath = path.join(__dirname, "..", "content", "content.js");
+const contentCssPath = path.join(__dirname, "..", "content", "content.css");
+
+function getCssDeclarations(css, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`));
+
+  assert.ok(match, `Expected CSS selector ${selector}`);
+
+  return new Map(
+    match[1]
+      .split(";")
+      .map((declaration) => declaration.trim())
+      .filter(Boolean)
+      .map((declaration) => {
+        const separatorIndex = declaration.indexOf(":");
+        return [
+          declaration.slice(0, separatorIndex).trim(),
+          declaration.slice(separatorIndex + 1).trim()
+        ];
+      })
+  );
+}
 
 function createClassList(element) {
   return {
@@ -141,7 +163,8 @@ function createContentHarness(options = {}) {
   const listeners = [];
   const document = createFakeDom(options);
   const windowListeners = {};
-  const context = vm.createContext({
+  const resizeObservers = [];
+  const globals = {
     chrome: {
       runtime: {
         onMessage: {
@@ -162,12 +185,29 @@ function createContentHarness(options = {}) {
         windowListeners[type] = listener;
       }
     }
-  });
+  };
+
+  if (options.withResizeObserver) {
+    globals.ResizeObserver = class {
+      constructor(callback) {
+        this.callback = callback;
+        this.targets = [];
+        resizeObservers.push(this);
+      }
+
+      observe(target) {
+        this.targets.push(target);
+      }
+    };
+  }
+
+  const context = vm.createContext(globals);
 
   return {
     context,
     document,
     listeners,
+    resizeObservers,
     windowListeners,
     runContent() {
       const source = fs.readFileSync(contentPath, "utf8");
@@ -210,6 +250,31 @@ test("executing content script twice only registers one runtime message listener
   assert.equal(harness.listeners.length, 1);
 });
 
+test("overlay and canvas CSS defensively resets host page layout styles", () => {
+  const css = fs.readFileSync(contentCssPath, "utf8");
+  const requiredDeclarations = new Map([
+    ["margin", "0"],
+    ["padding", "0"],
+    ["border", "0"],
+    ["box-sizing", "content-box"],
+    ["max-width", "none"],
+    ["max-height", "none"],
+    ["transform", "none"]
+  ]);
+
+  for (const selector of ["#websketch-overlay", "#websketch-overlay canvas"]) {
+    const declarations = getCssDeclarations(css, selector);
+
+    for (const [property, value] of requiredDeclarations) {
+      assert.equal(
+        declarations.get(property),
+        value,
+        `Expected ${selector} to set ${property}: ${value}`
+      );
+    }
+  }
+});
+
 test("pointer drawing uses page coordinates including scroll offsets", () => {
   const harness = createContentHarness({ scrollX: 100, scrollY: 200 });
 
@@ -246,4 +311,36 @@ test("clear clears the full document-sized drawing area", () => {
     harness.canvas.context.calls.filter(([name]) => name === "clearRect"),
     [["clearRect", 0, 0, 1800, 2400]]
   );
+});
+
+test("ResizeObserver grows overlay and canvas when the document size changes", () => {
+  const harness = createContentHarness({
+    documentWidth: 1200,
+    documentHeight: 900,
+    innerWidth: 800,
+    innerHeight: 600,
+    withResizeObserver: true
+  });
+
+  harness.runContent();
+  harness.send({ source: "websketch-popup", type: "set-enabled", enabled: true });
+
+  assert.equal(harness.resizeObservers.length, 1);
+  assert.deepEqual(harness.resizeObservers[0].targets, [
+    harness.document.documentElement,
+    harness.document.body
+  ]);
+
+  harness.document.documentElement.scrollWidth = 1800;
+  harness.document.documentElement.scrollHeight = 2400;
+  harness.document.body.scrollWidth = 1800;
+  harness.document.body.scrollHeight = 2400;
+  harness.resizeObservers[0].callback();
+
+  assert.equal(harness.canvas.style.width, "1800px");
+  assert.equal(harness.canvas.style.height, "2400px");
+  assert.equal(harness.canvas.width, 1800);
+  assert.equal(harness.canvas.height, 2400);
+  assert.equal(harness.overlay.style.width, "1800px");
+  assert.equal(harness.overlay.style.height, "2400px");
 });
