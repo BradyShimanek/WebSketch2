@@ -411,6 +411,41 @@ test("same-size ResizeObserver callback does not snapshot or redraw after initia
   );
 });
 
+test("same-size window resize event does not snapshot or redraw after initialization", () => {
+  const harness = createContentHarness({
+    documentWidth: 1200,
+    documentHeight: 900,
+    innerWidth: 800,
+    innerHeight: 600,
+    withRequestAnimationFrame: true
+  });
+
+  harness.runContent();
+  harness.send({ source: "websketch-popup", type: "set-enabled", enabled: true });
+
+  const initialCanvasCount = harness.document.canvases.length;
+  const initialDrawImageCalls = harness.canvas.context.calls.filter(([name]) => name === "drawImage")
+    .length;
+  const initialSetTransformCalls = harness.canvas.context.calls.filter(
+    ([name]) => name === "setTransform"
+  ).length;
+
+  harness.windowListeners.resize({ type: "resize", target: harness.context.window });
+  assert.equal(harness.animationFrames.length, 1);
+
+  harness.flushAnimationFrames();
+
+  assert.equal(harness.document.canvases.length, initialCanvasCount);
+  assert.equal(
+    harness.canvas.context.calls.filter(([name]) => name === "drawImage").length,
+    initialDrawImageCalls
+  );
+  assert.equal(
+    harness.canvas.context.calls.filter(([name]) => name === "setTransform").length,
+    initialSetTransformCalls
+  );
+});
+
 test("MutationObserver grows overlay and canvas when scroll size changes without element resize", () => {
   const harness = createContentHarness({
     documentWidth: 1200,

@@ -55,7 +55,7 @@
     overlay.addEventListener("pointermove", handlePointerMove);
     overlay.addEventListener("pointerup", finishStroke);
     overlay.addEventListener("pointercancel", finishStroke);
-    window.addEventListener("resize", scheduleResizeCanvas);
+    window.addEventListener("resize", () => scheduleResizeCanvas());
     observeDocumentSize();
     applyOverlayState();
 
