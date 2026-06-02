@@ -23,6 +23,24 @@ async function getActiveTab() {
   return tabs[0];
 }
 
+async function injectContentScript(tabId) {
+  await chrome.scripting.insertCSS({
+    target: { tabId },
+    files: ["content/content.css"]
+  });
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content/content.js"]
+  });
+}
+
+async function sendMessageToTab(tabId, command) {
+  return chrome.tabs.sendMessage(tabId, {
+    source: "websketch-popup",
+    ...command
+  });
+}
+
 async function sendCommand(command) {
   const tab = await getActiveTab();
 
@@ -30,16 +48,23 @@ async function sendCommand(command) {
     throw new Error("No active tab found");
   }
 
-  const response = await chrome.tabs.sendMessage(tab.id, {
-    source: "websketch-popup",
-    ...command
-  });
+  let response;
+  try {
+    response = await sendMessageToTab(tab.id, command);
+  } catch (error) {
+    await injectContentScript(tab.id);
+    response = await sendMessageToTab(tab.id, command);
+  }
 
   if (!response || !response.ok) {
     throw new Error(response?.error || "This page cannot be controlled");
   }
 
   return response.state;
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.WebSketchPopup = { sendCommand };
 }
 
 function setDisabled(disabled) {
