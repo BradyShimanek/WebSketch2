@@ -1,2 +1,35 @@
-<h1>WebSketch2!!!</h1>
-<!-- need to get this packed into the Extensions page in Chrome -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebSketch2</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="toolbar" aria-label="WebSketch controls">
+      <div class="row">
+        <button id="toggleDraw" class="tool-button" type="button" title="Toggle drawing" aria-pressed="false">Draw</button>
+        <button id="penTool" class="tool-button" type="button" title="Pen" aria-pressed="true">Pen</button>
+        <button id="eraserTool" class="tool-button" type="button" title="Eraser" aria-pressed="false">Erase</button>
+        <button id="panMode" class="tool-button" type="button" title="Pan/page mode" aria-pressed="false">Pan</button>
+        <button id="clearCanvas" class="tool-button danger" type="button" title="Clear drawing">Clear</button>
+      </div>
+
+      <div class="row controls">
+        <label class="color-control" title="Pen color">
+          <span class="sr-only">Pen color</span>
+          <input id="colorInput" type="color" value="#ef4444">
+        </label>
+        <label class="size-control">
+          <span>Size</span>
+          <input id="sizeInput" type="range" min="1" max="48" value="6">
+          <output id="sizeOutput" for="sizeInput">6</output>
+        </label>
+      </div>
+
+      <p id="status" class="status" role="status">Ready</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
