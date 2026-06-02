@@ -394,8 +394,8 @@ test("same-size ResizeObserver callback does not snapshot or redraw after initia
     ([name]) => name === "setTransform"
   ).length;
 
-  harness.resizeObservers[0].callback();
-  harness.resizeObservers[0].callback();
+  harness.resizeObservers[0].callback([{ target: harness.document.documentElement }]);
+  harness.resizeObservers[0].callback([{ target: harness.document.body }]);
   assert.equal(harness.animationFrames.length, 1);
 
   harness.flushAnimationFrames();

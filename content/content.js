@@ -64,7 +64,7 @@
 
   function observeDocumentSize() {
     if (!state.resizeObserver && typeof ResizeObserver === "function") {
-      state.resizeObserver = new ResizeObserver(scheduleResizeCanvas);
+      state.resizeObserver = new ResizeObserver(() => scheduleResizeCanvas());
       state.resizeObserver.observe(document.documentElement);
 
       if (document.body) {
@@ -73,7 +73,7 @@
     }
 
     if (!state.mutationObserver && typeof MutationObserver === "function") {
-      state.mutationObserver = new MutationObserver(scheduleResizeCanvas);
+      state.mutationObserver = new MutationObserver(() => scheduleResizeCanvas());
       const observerOptions = {
         attributes: true,
         childList: true,
