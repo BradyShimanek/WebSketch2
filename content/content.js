@@ -18,7 +18,11 @@
     context: null,
     drawing: false,
     lastPoint: null,
-    resizeObserver: null
+    resizeObserver: null,
+    mutationObserver: null,
+    resizeFramePending: false,
+    resizeFrameForce: false,
+    canvasSize: null
   };
 
   function ensureOverlay() {
@@ -46,12 +50,12 @@
       return false;
     }
 
-    resizeCanvas();
+    resizeCanvas(true);
     overlay.addEventListener("pointerdown", handlePointerDown);
     overlay.addEventListener("pointermove", handlePointerMove);
     overlay.addEventListener("pointerup", finishStroke);
     overlay.addEventListener("pointercancel", finishStroke);
-    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("resize", scheduleResizeCanvas);
     observeDocumentSize();
     applyOverlayState();
 
@@ -59,24 +63,79 @@
   }
 
   function observeDocumentSize() {
-    if (state.resizeObserver || typeof ResizeObserver !== "function") {
-      return;
+    if (!state.resizeObserver && typeof ResizeObserver === "function") {
+      state.resizeObserver = new ResizeObserver(scheduleResizeCanvas);
+      state.resizeObserver.observe(document.documentElement);
+
+      if (document.body) {
+        state.resizeObserver.observe(document.body);
+      }
     }
 
-    state.resizeObserver = new ResizeObserver(resizeCanvas);
-    state.resizeObserver.observe(document.documentElement);
+    if (!state.mutationObserver && typeof MutationObserver === "function") {
+      state.mutationObserver = new MutationObserver(scheduleResizeCanvas);
+      const observerOptions = {
+        attributes: true,
+        childList: true,
+        subtree: true
+      };
+      const mutationTargets = [document, document.documentElement, document.body].filter(Boolean);
 
-    if (document.body) {
-      state.resizeObserver.observe(document.body);
+      mutationTargets.forEach((target) => {
+        state.mutationObserver.observe(target, observerOptions);
+      });
     }
   }
 
-  function resizeCanvas() {
+  function scheduleResizeCanvas(force = false) {
+    const requestFrame =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : window.requestAnimationFrame;
+
+    if (typeof requestFrame !== "function") {
+      resizeCanvas(force);
+      return;
+    }
+
+    state.resizeFrameForce = state.resizeFrameForce || Boolean(force);
+
+    if (state.resizeFramePending) {
+      return;
+    }
+
+    state.resizeFramePending = true;
+    requestFrame(() => {
+      const shouldForce = state.resizeFrameForce;
+      state.resizeFramePending = false;
+      state.resizeFrameForce = false;
+      resizeCanvas(shouldForce);
+    });
+  }
+
+  function resizeCanvas(force = false) {
     if (!state.canvas || !state.context) {
       return;
     }
 
     const documentSize = getDocumentSize();
+    const ratio = window.devicePixelRatio || 1;
+    const nextCanvasSize = {
+      width: documentSize.width,
+      height: documentSize.height,
+      ratio
+    };
+
+    if (
+      !force &&
+      state.canvasSize &&
+      state.canvasSize.width === nextCanvasSize.width &&
+      state.canvasSize.height === nextCanvasSize.height &&
+      state.canvasSize.ratio === nextCanvasSize.ratio
+    ) {
+      return;
+    }
+
     const snapshot = document.createElement("canvas");
     snapshot.width = state.canvas.width;
     snapshot.height = state.canvas.height;
@@ -86,11 +145,11 @@
       snapshotContext.drawImage(state.canvas, 0, 0);
     }
 
-    const ratio = window.devicePixelRatio || 1;
     state.canvas.width = Math.max(1, Math.floor(documentSize.width * ratio));
     state.canvas.height = Math.max(1, Math.floor(documentSize.height * ratio));
     state.canvas.style.width = `${documentSize.width}px`;
     state.canvas.style.height = `${documentSize.height}px`;
+    state.canvasSize = nextCanvasSize;
 
     if (state.overlay) {
       state.overlay.style.width = `${documentSize.width}px`;

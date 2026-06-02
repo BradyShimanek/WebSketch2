@@ -164,6 +164,8 @@ function createContentHarness(options = {}) {
   const document = createFakeDom(options);
   const windowListeners = {};
   const resizeObservers = [];
+  const mutationObservers = [];
+  const animationFrames = [];
   const globals = {
     chrome: {
       runtime: {
@@ -187,6 +189,13 @@ function createContentHarness(options = {}) {
     }
   };
 
+  if (options.withRequestAnimationFrame) {
+    globals.requestAnimationFrame = (callback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    };
+  }
+
   if (options.withResizeObserver) {
     globals.ResizeObserver = class {
       constructor(callback) {
@@ -201,6 +210,20 @@ function createContentHarness(options = {}) {
     };
   }
 
+  if (options.withMutationObserver) {
+    globals.MutationObserver = class {
+      constructor(callback) {
+        this.callback = callback;
+        this.targets = [];
+        mutationObservers.push(this);
+      }
+
+      observe(target, observerOptions) {
+        this.targets.push({ target, options: observerOptions });
+      }
+    };
+  }
+
   const context = vm.createContext(globals);
 
   return {
@@ -208,10 +231,16 @@ function createContentHarness(options = {}) {
     document,
     listeners,
     resizeObservers,
+    mutationObservers,
+    animationFrames,
     windowListeners,
     runContent() {
       const source = fs.readFileSync(contentPath, "utf8");
       vm.runInContext(source, context);
+    },
+    flushAnimationFrames() {
+      const callbacks = animationFrames.splice(0);
+      callbacks.forEach((callback) => callback());
     },
     send(message) {
       let response;
@@ -336,6 +365,91 @@ test("ResizeObserver grows overlay and canvas when the document size changes", (
   harness.document.body.scrollWidth = 1800;
   harness.document.body.scrollHeight = 2400;
   harness.resizeObservers[0].callback();
+
+  assert.equal(harness.canvas.style.width, "1800px");
+  assert.equal(harness.canvas.style.height, "2400px");
+  assert.equal(harness.canvas.width, 1800);
+  assert.equal(harness.canvas.height, 2400);
+  assert.equal(harness.overlay.style.width, "1800px");
+  assert.equal(harness.overlay.style.height, "2400px");
+});
+
+test("same-size ResizeObserver callback does not snapshot or redraw after initialization", () => {
+  const harness = createContentHarness({
+    documentWidth: 1200,
+    documentHeight: 900,
+    innerWidth: 800,
+    innerHeight: 600,
+    withResizeObserver: true,
+    withRequestAnimationFrame: true
+  });
+
+  harness.runContent();
+  harness.send({ source: "websketch-popup", type: "set-enabled", enabled: true });
+
+  const initialCanvasCount = harness.document.canvases.length;
+  const initialDrawImageCalls = harness.canvas.context.calls.filter(([name]) => name === "drawImage")
+    .length;
+  const initialSetTransformCalls = harness.canvas.context.calls.filter(
+    ([name]) => name === "setTransform"
+  ).length;
+
+  harness.resizeObservers[0].callback();
+  harness.resizeObservers[0].callback();
+  assert.equal(harness.animationFrames.length, 1);
+
+  harness.flushAnimationFrames();
+
+  assert.equal(harness.document.canvases.length, initialCanvasCount);
+  assert.equal(
+    harness.canvas.context.calls.filter(([name]) => name === "drawImage").length,
+    initialDrawImageCalls
+  );
+  assert.equal(
+    harness.canvas.context.calls.filter(([name]) => name === "setTransform").length,
+    initialSetTransformCalls
+  );
+});
+
+test("MutationObserver grows overlay and canvas when scroll size changes without element resize", () => {
+  const harness = createContentHarness({
+    documentWidth: 1200,
+    documentHeight: 900,
+    innerWidth: 800,
+    innerHeight: 600,
+    withMutationObserver: true,
+    withRequestAnimationFrame: true
+  });
+
+  harness.runContent();
+  harness.send({ source: "websketch-popup", type: "set-enabled", enabled: true });
+
+  assert.equal(harness.mutationObservers.length, 1);
+  assert.deepEqual(
+    harness.mutationObservers[0].targets.map(({ target }) => target),
+    [harness.document, harness.document.documentElement, harness.document.body]
+  );
+  assert.deepEqual(
+    harness.mutationObservers[0].targets.map(({ options }) => ({
+      attributes: options.attributes,
+      childList: options.childList,
+      subtree: options.subtree
+    })),
+    [
+      { attributes: true, childList: true, subtree: true },
+      { attributes: true, childList: true, subtree: true },
+      { attributes: true, childList: true, subtree: true }
+    ]
+  );
+
+  harness.document.documentElement.scrollWidth = 1800;
+  harness.document.documentElement.scrollHeight = 2400;
+  harness.document.body.scrollWidth = 1800;
+  harness.document.body.scrollHeight = 2400;
+  harness.mutationObservers[0].callback();
+
+  assert.equal(harness.animationFrames.length, 1);
+  harness.flushAnimationFrames();
 
   assert.equal(harness.canvas.style.width, "1800px");
   assert.equal(harness.canvas.style.height, "2400px");
