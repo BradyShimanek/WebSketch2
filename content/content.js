@@ -1,4 +1,10 @@
 (function () {
+  if (globalThis.__webSketchContentLoaded) {
+    return;
+  }
+
+  globalThis.__webSketchContentLoaded = true;
+
   const OVERLAY_ID = "websketch-overlay";
 
   const state = {
@@ -16,6 +22,7 @@
 
   function ensureOverlay() {
     if (state.overlay && state.canvas && state.context) {
+      resizeCanvas();
       return true;
     }
 
@@ -54,6 +61,7 @@
       return;
     }
 
+    const documentSize = getDocumentSize();
     const snapshot = document.createElement("canvas");
     snapshot.width = state.canvas.width;
     snapshot.height = state.canvas.height;
@@ -64,28 +72,46 @@
     }
 
     const ratio = window.devicePixelRatio || 1;
-    state.canvas.width = Math.max(1, Math.floor(window.innerWidth * ratio));
-    state.canvas.height = Math.max(1, Math.floor(window.innerHeight * ratio));
-    state.canvas.style.width = `${window.innerWidth}px`;
-    state.canvas.style.height = `${window.innerHeight}px`;
+    state.canvas.width = Math.max(1, Math.floor(documentSize.width * ratio));
+    state.canvas.height = Math.max(1, Math.floor(documentSize.height * ratio));
+    state.canvas.style.width = `${documentSize.width}px`;
+    state.canvas.style.height = `${documentSize.height}px`;
+
+    if (state.overlay) {
+      state.overlay.style.width = `${documentSize.width}px`;
+      state.overlay.style.height = `${documentSize.height}px`;
+    }
+
+    state.context.setTransform(1, 0, 0, 1, 0, 0);
+    if (snapshotContext && snapshot.width && snapshot.height) {
+      state.context.drawImage(snapshot, 0, 0);
+    }
 
     state.context.setTransform(ratio, 0, 0, ratio, 0, 0);
     state.context.lineCap = "round";
     state.context.lineJoin = "round";
+  }
 
-    if (snapshotContext && snapshot.width && snapshot.height) {
-      state.context.drawImage(
-        snapshot,
-        0,
-        0,
-        snapshot.width,
-        snapshot.height,
-        0,
-        0,
-        window.innerWidth,
+  function getDocumentSize() {
+    const body = document.body;
+    const element = document.documentElement;
+
+    return {
+      width: Math.max(
+        element.scrollWidth,
+        element.clientWidth,
+        body ? body.scrollWidth : 0,
+        body ? body.clientWidth : 0,
+        window.innerWidth
+      ),
+      height: Math.max(
+        element.scrollHeight,
+        element.clientHeight,
+        body ? body.scrollHeight : 0,
+        body ? body.clientHeight : 0,
         window.innerHeight
-      );
-    }
+      )
+    };
   }
 
   function applyOverlayState() {
@@ -99,8 +125,8 @@
 
   function getPoint(event) {
     return {
-      x: event.clientX,
-      y: event.clientY
+      x: event.clientX + window.scrollX,
+      y: event.clientY + window.scrollY
     };
   }
 
@@ -133,6 +159,7 @@
     }
 
     event.preventDefault();
+    resizeCanvas();
     state.overlay.setPointerCapture(event.pointerId);
     state.drawing = true;
     state.lastPoint = getPoint(event);
@@ -169,7 +196,10 @@
       return;
     }
 
-    state.context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    resizeCanvas();
+
+    const documentSize = getDocumentSize();
+    state.context.clearRect(0, 0, documentSize.width, documentSize.height);
   }
 
   function getPublicState() {
