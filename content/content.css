@@ -1,0 +1,34 @@
+#websketch-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  pointer-events: auto;
+  touch-action: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-sizing: content-box;
+  max-width: none;
+  max-height: none;
+  transform: none;
+}
+
+#websketch-overlay.websketch-pan-mode {
+  pointer-events: none;
+}
+
+#websketch-overlay canvas {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-sizing: content-box;
+  max-width: none;
+  max-height: none;
+  transform: none;
+}
+
+#websketch-overlay.websketch-hidden {
+  display: none;
+}

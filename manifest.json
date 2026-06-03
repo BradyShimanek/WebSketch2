@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "WebSketch2",
+  "description": "Draw on webpages with a simple session-only overlay.",
+  "version": "1.0",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/pencil2.png",
+      "48": "icons/pencil2.png",
+      "128": "icons/pencil2.png"
+    }
+  },
+  "icons": {
+    "16": "icons/pencil2.png",
+    "48": "icons/pencil2.png",
+    "128": "icons/pencil2.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
